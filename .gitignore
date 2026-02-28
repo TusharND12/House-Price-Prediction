@@ -1,0 +1,22 @@
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+.Python
+*.so
+venv
+.venv
+env
+
+# Large binary (optional - uncomment to exclude)
+# model.pkl
+
+# Frontend
+frontend/node_modules
+frontend/dist
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
