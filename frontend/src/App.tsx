@@ -39,27 +39,31 @@ export default function App() {
 
   return (
     <div className={dark ? 'dark bg-slate-900 min-h-screen' : 'bg-slate-50 min-h-screen'}>
-      <header className="border-b border-slate-200 dark:border-slate-700 dark:bg-slate-800 bg-white sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
-          <h1 className="text-xl font-bold text-slate-800 dark:text-white">
-            SmartExplain AI
-          </h1>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setDark(!dark)}
-              className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700"
-            >
-              {dark ? <Sun size={20} /> : <Moon size={20} />}
-            </button>
-            <nav className="flex gap-1">
+      <header className="border-b border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-4 py-3 md:py-4 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="h-9 w-9 rounded-lg bg-indigo-600 flex items-center justify-center text-white text-sm font-semibold shadow-sm">
+              SE
+            </div>
+            <div>
+              <h1 className="text-lg md:text-xl font-semibold tracking-tight text-slate-900 dark:text-white">
+                SmartExplain AI
+              </h1>
+              <p className="text-[0.7rem] text-slate-500 dark:text-slate-400">
+                House price explainability playground
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <nav className="hidden sm:flex items-center gap-1.5">
               {tabs.map((t) => (
                 <button
                   key={t.id}
                   onClick={() => setTab(t.id)}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition ${
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition ${
                     tab === t.id
-                      ? 'bg-indigo-600 text-white'
-                      : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
+                      ? 'bg-indigo-600 text-white shadow-sm'
+                      : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
                   }`}
                 >
                   {t.icon}
@@ -67,6 +71,12 @@ export default function App() {
                 </button>
               ))}
             </nav>
+            <button
+              onClick={() => setDark(!dark)}
+              className="p-2 rounded-full border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800"
+            >
+              {dark ? <Sun size={18} /> : <Moon size={18} />}
+            </button>
           </div>
         </div>
       </header>

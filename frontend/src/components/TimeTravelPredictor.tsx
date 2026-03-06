@@ -10,8 +10,12 @@ type Props = { dark: boolean; inputs: PlaygroundInputs }
 export default function TimeTravelPredictor({ dark, inputs }: Props) {
   const [years, setYears] = useState<{ year: number; multiplier: number; price: number }[]>([])
   const [currentPrice, setCurrentPrice] = useState<number | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const fetchTimeTravel = () => {
+    setLoading(true)
+    setError(null)
     fetch(`${API}/time-travel`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -19,14 +23,20 @@ export default function TimeTravelPredictor({ dark, inputs }: Props) {
     })
       .then(r => r.json())
       .then(res => {
-        if (!res.error) {
+        if (res.error) {
+          setError(res.error)
+          setYears([])
+          setCurrentPrice(null)
+        } else {
           setYears(res.years || [])
           setCurrentPrice(res.current_price)
         }
       })
+      .catch(() => setError('Unable to fetch historical prices. Please try again.'))
+      .finally(() => setLoading(false))
   }
 
-  useEffect(() => { fetchTimeTravel() }, [])
+  useEffect(() => { fetchTimeTravel() }, [inputs])
 
   return (
     <div className="space-y-6">
@@ -38,10 +48,12 @@ export default function TimeTravelPredictor({ dark, inputs }: Props) {
       </p>
       <button
         onClick={fetchTimeTravel}
-        className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg"
+        disabled={loading}
+        className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium disabled:opacity-60 disabled:cursor-not-allowed"
       >
-        Travel Through Time
+        {loading ? 'Travelling…' : 'Travel Through Time'}
       </button>
+      {error && <p className="text-xs text-rose-500 mt-1">{error}</p>}
       {currentPrice !== null && years.length > 0 && (
         <>
           <p className="text-lg font-bold text-indigo-600">Today: ${currentPrice.toLocaleString()}</p>

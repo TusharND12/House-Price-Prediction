@@ -9,8 +9,12 @@ type Props = { dark: boolean; inputs: PlaygroundInputs }
 export default function SensitivityTheater({ dark, inputs }: Props) {
   const [cascades, setCascades] = useState<{ feature: string; change: string; old_prediction: number; new_prediction: number; delta: number }[]>([])
   const [prediction, setPrediction] = useState<number | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const fetchCascades = () => {
+    setLoading(true)
+    setError(null)
     fetch(`${API}/sensitivity`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -18,14 +22,20 @@ export default function SensitivityTheater({ dark, inputs }: Props) {
     })
       .then(r => r.json())
       .then(res => {
-        if (!res.error) {
+        if (res.error) {
+          setError(res.error)
+          setCascades([])
+          setPrediction(null)
+        } else {
           setCascades(res.cascades || [])
           setPrediction(res.prediction)
         }
       })
+      .catch(() => setError('Could not run sensitivity. Please try again.'))
+      .finally(() => setLoading(false))
   }
 
-  useEffect(() => { fetchCascades() }, [])
+  useEffect(() => { fetchCascades() }, [inputs])
 
   return (
     <div className="space-y-6">
@@ -37,10 +47,12 @@ export default function SensitivityTheater({ dark, inputs }: Props) {
       </p>
       <button
         onClick={fetchCascades}
-        className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg"
+        disabled={loading}
+        className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium disabled:opacity-60 disabled:cursor-not-allowed"
       >
-        Run Sensitivity
+        {loading ? 'Running…' : 'Run Sensitivity'}
       </button>
+      {error && <p className="text-xs text-rose-500">{error}</p>}
       {prediction !== null && (
         <>
           <p className="text-lg font-bold text-indigo-600">Base: ${prediction.toLocaleString()}</p>

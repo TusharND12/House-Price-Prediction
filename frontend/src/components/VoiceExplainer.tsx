@@ -10,9 +10,13 @@ export default function VoiceExplainer({ dark, inputs }: Props) {
   const [text, setText] = useState('')
   const [prediction, setPrediction] = useState<number | null>(null)
   const [speaking, setSpeaking] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const synthRef = useRef<SpeechSynthesis | null>(null)
 
   const explain = () => {
+    setLoading(true)
+    setError(null)
     fetch(`${API}/voice-explain`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -20,11 +24,15 @@ export default function VoiceExplainer({ dark, inputs }: Props) {
     })
       .then(r => r.json())
       .then(res => {
-        if (!res.error) {
+        if (res.error) {
+          setError(res.error)
+        } else {
           setText(res.text)
           setPrediction(res.prediction)
         }
       })
+      .catch(() => setError('Something went wrong. Please try again.'))
+      .finally(() => setLoading(false))
   }
 
   const speak = () => {
@@ -50,10 +58,12 @@ export default function VoiceExplainer({ dark, inputs }: Props) {
       <p className="text-xs text-slate-500">Rooms: {inputs.total_rooms} · Income: {inputs.median_income}</p>
       <button
         onClick={explain}
-        className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg"
+        disabled={loading}
+        className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg disabled:opacity-60 disabled:cursor-not-allowed text-sm font-medium"
       >
-        Generate Explanation
+        {loading ? 'Generating…' : 'Generate Explanation'}
       </button>
+      {error && <p className="text-xs text-rose-500 mt-1">{error}</p>}
       {text && (
         <div className="p-4 bg-slate-100 dark:bg-slate-700 rounded-lg">
           {prediction && (

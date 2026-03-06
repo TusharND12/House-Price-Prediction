@@ -9,8 +9,12 @@ type Props = { dark: boolean; inputs: PlaygroundInputs }
 export default function DreamHomeDNA({ dark, inputs }: Props) {
   const [strands, setStrands] = useState<{ name: string; contribution: number; segment: number }[]>([])
   const [prediction, setPrediction] = useState<number | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const fetchDNA = () => {
+    setLoading(true)
+    setError(null)
     fetch(`${API}/dna-strand`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -18,14 +22,20 @@ export default function DreamHomeDNA({ dark, inputs }: Props) {
     })
       .then(r => r.json())
       .then(res => {
-        if (!res.error) {
+        if (res.error) {
+          setError(res.error)
+          setStrands([])
+          setPrediction(null)
+        } else {
           setStrands(res.strands || [])
           setPrediction(res.prediction)
         }
       })
+      .catch(() => setError('Unable to build DNA. Please try again.'))
+      .finally(() => setLoading(false))
   }
 
-  useEffect(() => { fetchDNA() }, [])
+  useEffect(() => { fetchDNA() }, [inputs])
 
   return (
     <div className="space-y-6">
@@ -37,10 +47,12 @@ export default function DreamHomeDNA({ dark, inputs }: Props) {
       </p>
       <button
         onClick={fetchDNA}
-        className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg"
+        disabled={loading}
+        className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium disabled:opacity-60 disabled:cursor-not-allowed"
       >
-        Generate DNA
+        {loading ? 'Generating…' : 'Generate DNA'}
       </button>
+      {error && <p className="text-xs text-rose-500">{error}</p>}
       {prediction !== null && strands.length > 0 && (
         <>
           <p className="text-lg font-bold text-indigo-600">${prediction.toLocaleString()}</p>

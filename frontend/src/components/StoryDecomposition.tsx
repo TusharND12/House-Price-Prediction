@@ -16,8 +16,12 @@ type Props = { dark: boolean; inputs: PlaygroundInputs }
 export default function StoryDecomposition({ dark, inputs }: Props) {
   const [stories, setStories] = useState<{ category: string; total: number; items: { name: string; contribution: number }[] }[]>([])
   const [prediction, setPrediction] = useState<number | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const fetchStories = () => {
+    setLoading(true)
+    setError(null)
     fetch(`${API}/story-decomposition`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -25,11 +29,17 @@ export default function StoryDecomposition({ dark, inputs }: Props) {
     })
       .then(r => r.json())
       .then(res => {
-        if (!res.error) {
+        if (res.error) {
+          setError(res.error)
+          setStories([])
+          setPrediction(null)
+        } else {
           setStories(res.stories || [])
           setPrediction(res.prediction)
         }
       })
+      .catch(() => setError('Unable to load stories. Please try again.'))
+      .finally(() => setLoading(false))
   }
 
   useEffect(() => { fetchStories() }, [inputs])
@@ -46,7 +56,14 @@ export default function StoryDecomposition({ dark, inputs }: Props) {
       <p className="text-sm text-slate-600 dark:text-slate-400">
         The price broken into narratives (from Playground values).
       </p>
-      <button onClick={fetchStories} className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg">Update</button>
+      <button
+        onClick={fetchStories}
+        disabled={loading}
+        className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium disabled:opacity-60 disabled:cursor-not-allowed"
+      >
+        {loading ? 'Updating…' : 'Update'}
+      </button>
+      {error && <p className="text-xs text-rose-500">{error}</p>}
       {prediction !== null && (
         <>
           <p className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">${prediction.toLocaleString()}</p>

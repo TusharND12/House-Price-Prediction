@@ -10,8 +10,12 @@ export default function SacrificeGame({ dark, inputs }: Props) {
   const [options, setOptions] = useState<{ action: string; savings: number; new_value: number }[]>([])
   const [prediction, setPrediction] = useState<number | null>(null)
   const [targetSavings, setTargetSavings] = useState(50000)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const fetchOptions = () => {
+    setLoading(true)
+    setError(null)
     fetch(`${API}/sacrifice-options`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -19,11 +23,17 @@ export default function SacrificeGame({ dark, inputs }: Props) {
     })
       .then(r => r.json())
       .then(res => {
-        if (!res.error) {
+        if (res.error) {
+          setError(res.error)
+          setOptions([])
+          setPrediction(null)
+        } else {
           setOptions(res.options || [])
           setPrediction(res.prediction)
         }
       })
+      .catch(() => setError('Unable to fetch options. Please try again.'))
+      .finally(() => setLoading(false))
   }
 
   useEffect(() => { fetchOptions() }, [])
@@ -47,10 +57,12 @@ export default function SacrificeGame({ dark, inputs }: Props) {
       </div>
       <button
         onClick={fetchOptions}
-        className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg"
+        disabled={loading}
+        className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium disabled:opacity-60 disabled:cursor-not-allowed"
       >
-        Get Options
+        {loading ? 'Searching trade-offs…' : 'Get Options'}
       </button>
+      {error && <p className="text-xs text-rose-500 mt-1">{error}</p>}
       {prediction !== null && (
         <>
           <p className="text-lg font-bold text-indigo-600">Current: ${prediction.toLocaleString()}</p>

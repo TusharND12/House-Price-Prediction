@@ -10,8 +10,12 @@ export default function ConfidenceLandscape({ dark, inputs }: Props) {
   const [confidence, setConfidence] = useState<number | null>(null)
   const [prediction, setPrediction] = useState<number | null>(null)
   const [interpretation, setInterpretation] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const fetchConfidence = () => {
+    setLoading(true)
+    setError(null)
     fetch(`${API}/confidence`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -19,15 +23,22 @@ export default function ConfidenceLandscape({ dark, inputs }: Props) {
     })
       .then(r => r.json())
       .then(res => {
-        if (!res.error) {
+        if (res.error) {
+          setError(res.error)
+          setConfidence(null)
+          setPrediction(null)
+          setInterpretation('')
+        } else {
           setConfidence(res.confidence)
           setPrediction(res.prediction)
           setInterpretation(res.interpretation || '')
         }
       })
+      .catch(() => setError('Unable to check confidence. Please try again.'))
+      .finally(() => setLoading(false))
   }
 
-  useEffect(() => { fetchConfidence() }, [])
+  useEffect(() => { fetchConfidence() }, [inputs])
 
   const pct = confidence !== null ? confidence * 100 : 0
   const color = interpretation === 'high' ? '#22c55e' : interpretation === 'medium' ? '#f59e0b' : '#ef4444'
@@ -42,10 +53,12 @@ export default function ConfidenceLandscape({ dark, inputs }: Props) {
       </p>
       <button
         onClick={fetchConfidence}
-        className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg"
+        disabled={loading}
+        className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium disabled:opacity-60 disabled:cursor-not-allowed"
       >
-        Check Confidence
+        {loading ? 'Checking…' : 'Check Confidence'}
       </button>
+      {error && <p className="text-xs text-rose-500 mt-1">{error}</p>}
       {confidence !== null && (
         <>
           <p className="text-lg font-bold text-indigo-600">${prediction?.toLocaleString()}</p>
