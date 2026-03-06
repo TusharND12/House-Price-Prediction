@@ -4,19 +4,20 @@ import { GitCompare } from 'lucide-react'
 const API = '/api'
 
 const defaultInputs = {
-  lot_area: 8450,
-  overall_qual: 7,
-  gr_liv_area: 1710,
-  garage_cars: 2,
-  total_bsmt_sf: 856,
-  year_built: 2003,
-  full_bath: 2,
-  fireplace: 0,
+  total_rooms: 2635,
+  total_bedrooms: 537,
+  housing_median_age: 29,
+  median_income: 3.87,
+  population: 1425,
+  households: 499,
+  longitude: -119,
+  latitude: 36,
+  ocean_proximity: 'INLAND' as const,
 }
 
 export default function WhatIfLab() {
   const [current, setCurrent] = useState(defaultInputs)
-  const [updated, setUpdated] = useState({ ...defaultInputs, gr_liv_area: 2500 })
+  const [updated, setUpdated] = useState({ ...defaultInputs, total_rooms: 4000 })
   const [result, setResult] = useState<{
     original_prediction?: number
     updated_prediction?: number
@@ -34,14 +35,15 @@ export default function WhatIfLab() {
   }
 
   const fields = [
-    { key: 'lot_area', label: 'Lot Area' },
-    { key: 'overall_qual', label: 'Overall Qual' },
-    { key: 'gr_liv_area', label: 'Living Area' },
-    { key: 'garage_cars', label: 'Garage Cars' },
-    { key: 'total_bsmt_sf', label: 'Basement' },
-    { key: 'year_built', label: 'Year Built' },
-    { key: 'full_bath', label: 'Bathrooms' },
-    { key: 'fireplace', label: 'Fireplaces' },
+    { key: 'total_rooms', label: 'Total Rooms' },
+    { key: 'total_bedrooms', label: 'Total Bedrooms' },
+    { key: 'housing_median_age', label: 'Housing Age' },
+    { key: 'median_income', label: 'Median Income' },
+    { key: 'population', label: 'Population' },
+    { key: 'households', label: 'Households' },
+    { key: 'longitude', label: 'Longitude' },
+    { key: 'latitude', label: 'Latitude' },
+    { key: 'ocean_proximity', label: 'Ocean Proximity', isSelect: true },
   ]
 
   return (
@@ -54,15 +56,27 @@ export default function WhatIfLab() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white dark:bg-slate-800 rounded-xl p-6 shadow border border-slate-200 dark:border-slate-700">
           <h3 className="font-semibold mb-4 text-slate-800 dark:text-white">Scenario A (Current)</h3>
-          {fields.map(({ key, label }) => (
+          {fields.map(({ key, label, isSelect }) => (
             <div key={key} className="mb-3">
               <label className="block text-sm text-slate-600 dark:text-slate-400">{label}</label>
-              <input
-                type="number"
-                value={current[key as keyof typeof current]}
-                onChange={(e) => setCurrent({ ...current, [key]: Number(e.target.value) })}
-                className="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white"
-              />
+              {isSelect ? (
+                <select
+                  value={current[key as keyof typeof current] as string}
+                  onChange={(e) => setCurrent({ ...current, [key]: e.target.value })}
+                  className="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white"
+                >
+                  {['INLAND', '<1H OCEAN', 'NEAR OCEAN', 'NEAR BAY', 'ISLAND'].map((v) => (
+                    <option key={v} value={v}>{v}</option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  type="number"
+                  value={current[key as keyof typeof current] as number}
+                  onChange={(e) => setCurrent({ ...current, [key]: Number(e.target.value) })}
+                  className="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white"
+                />
+              )}
             </div>
           ))}
         </div>
@@ -79,15 +93,27 @@ export default function WhatIfLab() {
 
         <div className="bg-white dark:bg-slate-800 rounded-xl p-6 shadow border border-slate-200 dark:border-slate-700">
           <h3 className="font-semibold mb-4 text-slate-800 dark:text-white">Scenario B (What-If)</h3>
-          {fields.map(({ key, label }) => (
+          {fields.map(({ key, label, isSelect }) => (
             <div key={key} className="mb-3">
               <label className="block text-sm text-slate-600 dark:text-slate-400">{label}</label>
-              <input
-                type="number"
-                value={updated[key as keyof typeof updated]}
-                onChange={(e) => setUpdated({ ...updated, [key]: Number(e.target.value) })}
-                className="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white"
-              />
+              {isSelect ? (
+                <select
+                  value={updated[key as keyof typeof updated] as string}
+                  onChange={(e) => setUpdated({ ...updated, [key]: e.target.value })}
+                  className="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white"
+                >
+                  {['INLAND', '<1H OCEAN', 'NEAR OCEAN', 'NEAR BAY', 'ISLAND'].map((v) => (
+                    <option key={v} value={v}>{v}</option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  type="number"
+                  value={updated[key as keyof typeof updated] as number}
+                  onChange={(e) => setUpdated({ ...updated, [key]: Number(e.target.value) })}
+                  className="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white"
+                />
+              )}
             </div>
           ))}
         </div>

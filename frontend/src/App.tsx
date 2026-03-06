@@ -6,16 +6,19 @@ import WhatIfLab from './components/WhatIfLab'
 import MapView from './components/MapView'
 import ExperimentsHub from './components/ExperimentsHub'
 
-export const DEFAULT_PLAYGROUND_INPUTS = {
-  lot_area: 8450,
-  overall_qual: 7,
-  gr_liv_area: 1710,
-  garage_cars: 2,
-  total_bsmt_sf: 856,
-  year_built: 2003,
-  full_bath: 2,
-  fireplace: 0,
+export const DEFAULT_PLAYGROUND_INPUTS_HP = {
+  total_rooms: 2635,
+  total_bedrooms: 537,
+  housing_median_age: 29,
+  median_income: 3.87,
+  population: 1425,
+  households: 499,
+  longitude: -119,
+  latitude: 36,
+  ocean_proximity: 'INLAND',
 }
+
+export const DEFAULT_PLAYGROUND_INPUTS = DEFAULT_PLAYGROUND_INPUTS_HP
 
 export type PlaygroundInputs = typeof DEFAULT_PLAYGROUND_INPUTS
 

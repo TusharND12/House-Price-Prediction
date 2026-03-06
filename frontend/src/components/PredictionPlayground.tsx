@@ -53,27 +53,42 @@ export default function PredictionPlayground({ dark, inputs, onInputsChange }: P
             <h3 className="font-semibold mb-4 text-slate-800 dark:text-white">Property Details</h3>
             <div className="space-y-4">
               {[
-                { key: 'lot_area', label: 'Lot Area (sq ft)', min: 1000, max: 50000, step: 100 },
-                { key: 'overall_qual', label: 'Overall Quality (1-10)', min: 1, max: 10, step: 1 },
-                { key: 'gr_liv_area', label: 'Above Ground Living Area', min: 300, max: 6000, step: 50 },
-                { key: 'garage_cars', label: 'Garage Cars', min: 0, max: 4, step: 1 },
-                { key: 'total_bsmt_sf', label: 'Total Basement (sq ft)', min: 0, max: 6000, step: 50 },
-                { key: 'year_built', label: 'Year Built', min: 1880, max: 2010, step: 1 },
-                { key: 'full_bath', label: 'Full Bathrooms', min: 0, max: 4, step: 1 },
-                { key: 'fireplace', label: 'Fireplaces', min: 0, max: 4, step: 1 },
-              ].map(({ key, label, min, max, step }) => (
+                { key: 'total_rooms', label: 'Total Rooms', min: 2, max: 40000, step: 100 },
+                { key: 'total_bedrooms', label: 'Total Bedrooms', min: 1, max: 6500, step: 10 },
+                { key: 'housing_median_age', label: 'Housing Median Age', min: 1, max: 52, step: 1 },
+                { key: 'median_income', label: 'Median Income', min: 0.5, max: 15, step: 0.1 },
+                { key: 'population', label: 'Population', min: 3, max: 36000, step: 100 },
+                { key: 'households', label: 'Households', min: 1, max: 6100, step: 50 },
+                { key: 'longitude', label: 'Longitude', min: -124, max: -114, step: 0.1 },
+                { key: 'latitude', label: 'Latitude', min: 32, max: 42, step: 0.1 },
+                { key: 'ocean_proximity', label: 'Ocean Proximity', min: 0, max: 0, step: 0, isSelect: true },
+              ].map(({ key, label, min, max, step, isSelect }) => (
                 <div key={key}>
                   <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">{label}</label>
-                  <input
-                    type="range"
-                    min={min}
-                    max={max}
-                    step={step}
-                    value={inputs[key as keyof typeof inputs]}
-                    onChange={(e) => setInputs({ ...inputs, [key]: Number(e.target.value) })}
-                    className="w-full"
-                  />
-                  <span className="text-sm text-slate-500">{inputs[key as keyof typeof inputs]}</span>
+                  {isSelect ? (
+                    <select
+                      value={inputs[key as keyof typeof inputs] as string}
+                      onChange={(e) => setInputs({ ...inputs, [key]: e.target.value })}
+                      className="w-full px-3 py-2 rounded border dark:bg-slate-800 dark:border-slate-600"
+                    >
+                      {['INLAND', '<1H OCEAN', 'NEAR OCEAN', 'NEAR BAY', 'ISLAND'].map((v) => (
+                        <option key={v} value={v}>{v}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <>
+                      <input
+                        type="range"
+                        min={min}
+                        max={max}
+                        step={step}
+                        value={inputs[key as keyof typeof inputs] as number}
+                        onChange={(e) => setInputs({ ...inputs, [key]: Number(e.target.value) })}
+                        className="w-full"
+                      />
+                      <span className="text-sm text-slate-500">{inputs[key as keyof typeof inputs]}</span>
+                    </>
+                  )}
                 </div>
               ))}
             </div>

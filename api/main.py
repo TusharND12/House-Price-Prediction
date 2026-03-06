@@ -31,6 +31,14 @@ BASE = Path(__file__).parent.parent
 
 
 def load_artifacts():
+    # Prefer best-tuned model from notebook (model_hp.pkl)
+    hp_path = BASE / "model_hp.pkl"
+    if hp_path.exists():
+        try:
+            import joblib
+            return joblib.load(hp_path)
+        except Exception:
+            pass
     p = BASE / "model.pkl"
     if not p.exists():
         return None
@@ -39,6 +47,47 @@ def load_artifacts():
 
 
 ARTIFACTS = load_artifacts()
+
+
+def _is_hp_artifacts():
+    """True if loaded artifacts are from the notebook HP pipeline (best-tuned model)."""
+    return ARTIFACTS is not None and "scaler" in ARTIFACTS and "ohe" in ARTIFACTS
+
+
+def _build_hp_features(data: dict):
+    """Build one row of features for HP model from API input."""
+    from core.feature_builder_hp import build_features_from_api_input
+    ohe = ARTIFACTS["ohe"]
+    return build_features_from_api_input(
+        longitude=float(data.get("longitude", -119)),
+        latitude=float(data.get("latitude", 36)),
+        housing_median_age=float(data.get("housing_median_age", 29)),
+        total_rooms=float(data.get("total_rooms", 2635)),
+        total_bedrooms=float(data.get("total_bedrooms", 537)),
+        population=float(data.get("population", 1425)),
+        households=float(data.get("households", 499)),
+        median_income=float(data.get("median_income", 3.87)),
+        ocean_proximity=str(data.get("ocean_proximity", "INLAND")),
+        ohe=ohe,
+    )
+
+
+def _hp_predict_and_contributions(X_s: np.ndarray):
+    """Return (prediction, contributions_breakdown) for HP model. X_s is scaled."""
+    model = ARTIFACTS["model"]
+    fn = ARTIFACTS["feature_names"]
+    pred = float(model.predict(X_s)[0])
+    if hasattr(model, "feature_importances_"):
+        imp = model.feature_importances_
+        total = imp.sum() or 1e-10
+        pcts = (imp / total * 100).tolist()
+        contribs = (pred * imp / total).tolist()
+    else:
+        contribs = [0.0] * len(fn)
+        pcts = [100.0 / len(fn)] * len(fn)
+    breakdown = [{"name": fn[i], "contribution": contribs[i], "percent": pcts[i]} for i in range(len(fn))]
+    breakdown.sort(key=lambda x: abs(x["contribution"]), reverse=True)
+    return pred, breakdown
 
 
 class HousePricesInput(BaseModel):
@@ -69,10 +118,11 @@ class CaliforniaInput(BaseModel):
 @app.get("/api/info")
 def get_info():
     if not ARTIFACTS:
-        return {"error": "Model not found. Run python train.py first."}
+        return {"error": "Model not found. Run notebook HP section and save model_hp.pkl, or run train.py."}
     ds = ARTIFACTS.get("dataset", "house_prices")
-    fe = ARTIFACTS["fe"]
     fn = ARTIFACTS.get("feature_names", [])
+    if _is_hp_artifacts():
+        return {"dataset": ds, "feature_names": fn, "n_features": len(fn), "model_r2": "~0.85", "model_type": "best_tuned"}
     return {
         "dataset": ds,
         "feature_names": fn,
@@ -85,12 +135,17 @@ def get_info():
 def predict(data: dict):
     if not ARTIFACTS:
         return {"error": "Model not found."}
-    model = ARTIFACTS["model"]
-    fe = ARTIFACTS["fe"]
-    fn = ARTIFACTS["feature_names"]
-    ds = ARTIFACTS.get("dataset", "house_prices")
-
     try:
+        if _is_hp_artifacts():
+            X = _build_hp_features(data)
+            X_s = ARTIFACTS["scaler"].transform(X)
+            pred, breakdown = _hp_predict_and_contributions(X_s)
+            return {"prediction": pred, "contributions": breakdown[:15], "cost_history": []}
+        model = ARTIFACTS["model"]
+        fe = ARTIFACTS["fe"]
+        fn = ARTIFACTS["feature_names"]
+        y_scaler = ARTIFACTS.get("y_scaler")
+        ds = ARTIFACTS.get("dataset", "house_prices")
         if ds == "house_prices":
             X = fe.build_from_sliders(
                 lot_area=float(data.get("lot_area", 8450)),
@@ -116,11 +171,17 @@ def predict(data: dict):
                 longitude=float(data.get("longitude", -119)),
                 latitude=float(data.get("latitude", 36)),
             )
-        pred = float(model.predict(X)[0])
+        raw_pred = float(model.predict(X)[0])
+        if y_scaler is not None:
+            pred = float(y_scaler.inverse_transform([[raw_pred]])[0, 0])
+        else:
+            pred = raw_pred
         from core.explainability import FeatureExplainer
         exp = FeatureExplainer(model.weights, model.bias, fn)
         res = exp.explain(X)
-        contribs = res["contributions"][0].tolist()
+        contribs = res["contributions"][0]
+        scale = float(getattr(getattr(y_scaler, "scale_", [1.0]), "__getitem__", lambda i: 1.0)(0)) if y_scaler is not None else 1.0
+        contribs = (contribs * scale).tolist()
         pcts = res["percentages"][0].tolist()
         breakdown = [{"name": fn[i], "contribution": contribs[i], "percent": pcts[i]} for i in range(len(fn))]
         breakdown.sort(key=lambda x: abs(x["contribution"]), reverse=True)
@@ -134,22 +195,32 @@ def simulate(data: dict):
     """Compare two scenarios. Pass current and updated inputs."""
     if not ARTIFACTS:
         return {"error": "Model not found."}
-    from core.explainability import FeatureExplainer
-
-    model = ARTIFACTS["model"]
-    fe = ARTIFACTS["fe"]
-    fn = ARTIFACTS["feature_names"]
-    exp = FeatureExplainer(model.weights, model.bias, fn)
-    ds = ARTIFACTS.get("dataset", "house_prices")
-
-    def to_float(d):
-        return {k: float(v) if k != "ocean_proximity" else v for k, v in d.items()}
-
     curr = data.get("current", {})
     upd = data.get("updated", curr)
-    hp_defaults = {"lot_area": 8450, "overall_qual": 7, "gr_liv_area": 1710, "garage_cars": 2, "total_bsmt_sf": 856, "year_built": 2003, "full_bath": 2, "fireplace": 0}
-    cal_defaults = {"total_rooms": 2635, "total_bedrooms": 537, "housing_median_age": 29, "median_income": 3.87, "population": 1425, "households": 499, "location_rating": 3.5, "distance_from_center": 0.5, "ocean_proximity": "INLAND", "longitude": -119, "latitude": 36}
     try:
+        if _is_hp_artifacts():
+            X1 = _build_hp_features(curr)
+            X2 = _build_hp_features(upd)
+            scaler = ARTIFACTS["scaler"]
+            p1, br1 = _hp_predict_and_contributions(scaler.transform(X1))
+            p2, br2 = _hp_predict_and_contributions(scaler.transform(X2))
+            fn = ARTIFACTS["feature_names"]
+            return {
+                "original_prediction": p1,
+                "updated_prediction": p2,
+                "price_difference": p2 - p1,
+                "contributions_original": [{"name": b["name"], "value": b["contribution"]} for b in br1[:10]],
+                "contributions_updated": [{"name": b["name"], "value": b["contribution"]} for b in br2[:10]],
+            }
+        from core.explainability import FeatureExplainer
+        model = ARTIFACTS["model"]
+        fe = ARTIFACTS["fe"]
+        fn = ARTIFACTS["feature_names"]
+        y_scaler = ARTIFACTS.get("y_scaler")
+        exp = FeatureExplainer(model.weights, model.bias, fn)
+        ds = ARTIFACTS.get("dataset", "house_prices")
+        hp_defaults = {"lot_area": 8450, "overall_qual": 7, "gr_liv_area": 1710, "garage_cars": 2, "total_bsmt_sf": 856, "year_built": 2003, "full_bath": 2, "fireplace": 0}
+        cal_defaults = {"total_rooms": 2635, "total_bedrooms": 537, "housing_median_age": 29, "median_income": 3.87, "population": 1425, "households": 499, "location_rating": 3.5, "distance_from_center": 0.5, "ocean_proximity": "INLAND", "longitude": -119, "latitude": 36}
         if ds == "house_prices":
             c1 = {k: float(curr.get(k, hp_defaults.get(k, 0))) for k in ["lot_area", "overall_qual", "gr_liv_area", "garage_cars", "total_bsmt_sf", "year_built", "full_bath", "fireplace"]}
             c2 = {k: float(upd.get(k, hp_defaults.get(k, 0))) for k in ["lot_area", "overall_qual", "gr_liv_area", "garage_cars", "total_bsmt_sf", "year_built", "full_bath", "fireplace"]}
@@ -160,8 +231,13 @@ def simulate(data: dict):
             c2 = {k: upd.get(k) if k == "ocean_proximity" else float(upd.get(k, cal_defaults.get(k, 0))) for k in ["total_rooms", "total_bedrooms", "housing_median_age", "median_income", "population", "households", "location_rating", "distance_from_center", "ocean_proximity", "longitude", "latitude"]}
             X1 = fe.build_from_sliders(**c1)
             X2 = fe.build_from_sliders(**c2)
-        p1 = float(model.predict(X1)[0])
-        p2 = float(model.predict(X2)[0])
+        r1_raw = float(model.predict(X1)[0])
+        r2_raw = float(model.predict(X2)[0])
+        if y_scaler is not None:
+            p1 = float(y_scaler.inverse_transform([[r1_raw]])[0, 0])
+            p2 = float(y_scaler.inverse_transform([[r2_raw]])[0, 0])
+        else:
+            p1, p2 = r1_raw, r2_raw
         r1 = exp.explain(X1)
         r2 = exp.explain(X2)
         return {
@@ -200,12 +276,18 @@ def _get_prediction_and_contributions(data: dict):
     """Helper: run prediction and return (pred, contributions, fn)."""
     if not ARTIFACTS:
         return None, [], []
-    from core.explainability import FeatureExplainer
-    model = ARTIFACTS["model"]
-    fe = ARTIFACTS["fe"]
-    fn = ARTIFACTS["feature_names"]
-    ds = ARTIFACTS.get("dataset", "house_prices")
     try:
+        if _is_hp_artifacts():
+            X = _build_hp_features(data)
+            X_s = ARTIFACTS["scaler"].transform(X)
+            pred, breakdown = _hp_predict_and_contributions(X_s)
+            return pred, breakdown, ARTIFACTS["feature_names"]
+        from core.explainability import FeatureExplainer
+        model = ARTIFACTS["model"]
+        fe = ARTIFACTS["fe"]
+        fn = ARTIFACTS["feature_names"]
+        y_scaler = ARTIFACTS.get("y_scaler")
+        ds = ARTIFACTS.get("dataset", "house_prices")
         if ds == "house_prices":
             X = fe.build_from_sliders(
                 lot_area=float(data.get("lot_area", 8450)),
@@ -231,10 +313,16 @@ def _get_prediction_and_contributions(data: dict):
                 longitude=float(data.get("longitude", -119)),
                 latitude=float(data.get("latitude", 36)),
             )
-        pred = float(model.predict(X)[0])
+        raw_pred = float(model.predict(X)[0])
+        if y_scaler is not None:
+            pred = float(y_scaler.inverse_transform([[raw_pred]])[0, 0])
+        else:
+            pred = raw_pred
         exp = FeatureExplainer(model.weights, model.bias, fn)
         res = exp.explain(X)
         contribs = res["contributions"][0]
+        scale = float(getattr(getattr(y_scaler, "scale_", [1.0]), "__getitem__", lambda i: 1.0)(0)) if y_scaler is not None else 1.0
+        contribs = contribs * scale
         breakdown = [{"name": fn[i], "contribution": float(contribs[i])} for i in range(len(fn))]
         breakdown.sort(key=lambda x: abs(x["contribution"]), reverse=True)
         return pred, breakdown, fn
@@ -327,8 +415,10 @@ def counterfactual(data: dict):
 @app.post("/api/sacrifice-options")
 def sacrifice_options(data: dict):
     """Return trade-off options: 'To save $X, would you...'"""
+    cal_defaults = {"total_rooms": 2635, "total_bedrooms": 537, "housing_median_age": 29, "median_income": 3.87, "population": 1425, "households": 499, "longitude": -119, "latitude": 36, "ocean_proximity": "INLAND"}
     hp_defaults = {"lot_area": 8450, "overall_qual": 7, "gr_liv_area": 1710, "garage_cars": 2, "total_bsmt_sf": 856, "year_built": 2003, "full_bath": 2, "fireplace": 0}
-    data = {**hp_defaults, **{k: v for k, v in data.items() if v is not None}}
+    defaults = cal_defaults if _is_hp_artifacts() else hp_defaults
+    data = {**defaults, **{k: v for k, v in data.items() if v is not None}}
     pred, breakdown, fn = _get_prediction_and_contributions(data)
     if pred is None:
         return {"error": "Model not found.", "options": []}
@@ -336,7 +426,7 @@ def sacrifice_options(data: dict):
     options = []
     ds = ARTIFACTS.get("dataset", "house_prices")
     # Map slider keys to human labels
-    labels = {
+    hp_labels = {
         "gr_liv_area": ("reduce living area by ~200 sq ft", 200),
         "overall_qual": ("lower quality by 1 point", 1),
         "lot_area": ("reduce lot size by ~1000 sq ft", 1000),
@@ -346,9 +436,50 @@ def sacrifice_options(data: dict):
         "full_bath": ("have 1 fewer bathroom", 1),
         "fireplace": ("have 1 fewer fireplace", 1),
     }
-    fe = ARTIFACTS["fe"]
+    cal_labels = {
+        "total_rooms": ("reduce total rooms by ~200", 200),
+        "total_bedrooms": ("reduce bedrooms by ~50", 50),
+        "median_income": ("accept lower income area", 0.5),
+        "housing_median_age": ("accept older housing (5 years)", 5),
+        "population": ("move to less populated area", 200),
+    }
+    labels = cal_labels if _is_hp_artifacts() else hp_labels
+    fe = ARTIFACTS.get("fe")
     model = ARTIFACTS["model"]
     for key, (label, delta) in labels.items():
+        if _is_hp_artifacts():
+            curr = float(data.get(key, 0))
+            if key == "total_rooms" and curr > 400:
+                new_val = max(2, curr - delta)
+                new_data = {**data, key: new_val}
+                p2, _, _ = _get_prediction_and_contributions(new_data)
+                if p2 is not None and pred - p2 > 0:
+                    options.append({"action": label, "savings": pred - p2, "new_value": new_val})
+            elif key == "total_bedrooms" and curr > 100:
+                new_val = max(1, curr - delta)
+                new_data = {**data, key: new_val}
+                p2, _, _ = _get_prediction_and_contributions(new_data)
+                if p2 is not None and pred - p2 > 0:
+                    options.append({"action": label, "savings": pred - p2, "new_value": new_val})
+            elif key == "median_income" and curr > 1:
+                new_val = max(0.5, curr - delta)
+                new_data = {**data, key: new_val}
+                p2, _, _ = _get_prediction_and_contributions(new_data)
+                if p2 is not None and pred - p2 > 0:
+                    options.append({"action": label, "savings": pred - p2, "new_value": new_val})
+            elif key == "housing_median_age" and curr > 10:
+                new_val = curr + delta
+                new_data = {**data, key: new_val}
+                p2, _, _ = _get_prediction_and_contributions(new_data)
+                if p2 is not None and pred - p2 > 0:
+                    options.append({"action": label, "savings": pred - p2, "new_value": new_val})
+            elif key == "population" and curr > 500:
+                new_val = max(3, curr - delta)
+                new_data = {**data, key: new_val}
+                p2, _, _ = _get_prediction_and_contributions(new_data)
+                if p2 is not None and pred - p2 > 0:
+                    options.append({"action": label, "savings": pred - p2, "new_value": new_val})
+            continue
         if ds != "house_prices":
             continue
         curr = float(data.get(key, 0))
@@ -387,11 +518,14 @@ def sensitivity(data: dict):
     pred, breakdown, fn = _get_prediction_and_contributions(data)
     if pred is None:
         return {"error": "Model not found.", "cascades": []}
-    keys = ["gr_liv_area", "overall_qual", "lot_area", "garage_cars"] if ARTIFACTS.get("dataset") == "house_prices" else []
+    keys = ["total_rooms", "median_income", "total_bedrooms", "housing_median_age"] if _is_hp_artifacts() else (["gr_liv_area", "overall_qual", "lot_area", "garage_cars"] if ARTIFACTS.get("dataset") == "house_prices" else [])
     cascades = []
     for key in keys:
         val = float(data.get(key, 0))
-        step = 200 if "area" in key or "liv" in key else 1
+        if _is_hp_artifacts():
+            step = 200 if "rooms" in key or "bedrooms" in key else (0.5 if "income" in key else 5)
+        else:
+            step = 200 if "area" in key or "liv" in key else 1
         new_data = {**data, key: val + step}
         p2, b2, _ = _get_prediction_and_contributions(new_data)
         if p2 is not None:

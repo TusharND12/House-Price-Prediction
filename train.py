@@ -13,6 +13,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 import pickle
 import numpy as np
 import pandas as pd
+from sklearn.preprocessing import StandardScaler
 
 from core.model import LinearRegressionGD
 from core.metrics import mae, mse, rmse, r2_score
@@ -56,13 +57,19 @@ def main():
     feature_names = fe.get_feature_names()
     print(f"Features: {len(feature_names)}, Samples: {len(X)}")
 
+    # Train/test split
     n = len(X)
     idx = np.random.permutation(n)
     split = int(0.8 * n)
     X_train, X_test = X[idx[:split]], X[idx[split:]]
     y_train, y_test = y[idx[:split]], y[idx[split:]]
 
-    print("Training model (momentum + LR decay)...")
+    # Scale target y for stable gradient descent (features are already scaled by fe)
+    y_scaler = StandardScaler()
+    y_train_scaled = y_scaler.fit_transform(y_train.reshape(-1, 1)).ravel()
+    y_test_scaled = y_scaler.transform(y_test.reshape(-1, 1)).ravel()
+
+    print("Training model (momentum + LR decay) on scaled target...")
     model = LinearRegressionGD(
         learning_rate=0.03,
         n_iterations=5000,
@@ -77,9 +84,11 @@ def main():
         tol=1e-7,
         random_state=RANDOM_STATE,
     )
-    model.fit(X_train, y_train, feature_names=feature_names)
+    model.fit(X_train, y_train_scaled, feature_names=feature_names)
 
-    # Retrain on full data for production
+    # Retrain on full data for production (with its own scaler)
+    y_scaler_full = StandardScaler()
+    y_full_scaled = y_scaler_full.fit_transform(y.reshape(-1, 1)).ravel()
     model_full = LinearRegressionGD(
         learning_rate=0.03,
         n_iterations=5000,
@@ -94,12 +103,19 @@ def main():
         tol=1e-7,
         random_state=RANDOM_STATE,
     )
-    model_full.fit(X, y, feature_names=feature_names)
+    model_full.fit(X, y_full_scaled, feature_names=feature_names)
     model = model_full
 
-    y_pred_train = model.predict(X_train)
-    y_pred_test = model.predict(X_test)
-    y_pred_full = model.predict(X)
+    # Inverse-transform predictions for metrics (model was trained with y_scaler_full)
+    y_pred_train = y_scaler_full.inverse_transform(
+        model.predict(X_train).reshape(-1, 1)
+    ).ravel()
+    y_pred_test = y_scaler_full.inverse_transform(
+        model.predict(X_test).reshape(-1, 1)
+    ).ravel()
+    y_pred_full = y_scaler_full.inverse_transform(
+        model.predict(X).reshape(-1, 1)
+    ).ravel()
 
     print("\nEvaluation metrics (Train 80%):")
     print("  MAE:  ", mae(y_train, y_pred_train))
@@ -117,6 +133,7 @@ def main():
         "fe": fe,
         "feature_names": feature_names,
         "dataset": "house_prices" if train_path.exists() else "california",
+        "y_scaler": y_scaler_full,
     }
     out_path = Path(__file__).parent / "model.pkl"
     with open(out_path, "wb") as f:

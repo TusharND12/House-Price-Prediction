@@ -10,6 +10,10 @@ Cost Function (L2 regularized):
 Gradient Updates:
     dw = (1/m) Xᵀ(y_pred - y) + 2λw
     db = (1/m) Σ(y_pred - y)
+
+Important: For stability, scale features (e.g. StandardScaler) and scale the target y
+before training. Unscaled targets (e.g. house prices 50k–500k) cause huge gradients
+and weight explosion. Inverse-transform predictions for evaluation in original units.
 """
 
 from __future__ import annotations

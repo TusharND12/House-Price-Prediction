@@ -47,7 +47,7 @@ export default function VoiceExplainer({ dark, inputs }: Props) {
       <p className="text-sm text-slate-600 dark:text-slate-400">
         Hear the model explain the price in plain English—using values from Prediction Playground.
       </p>
-      <p className="text-xs text-slate-500">Living area: {inputs.gr_liv_area} sq ft · Quality: {inputs.overall_qual}</p>
+      <p className="text-xs text-slate-500">Rooms: {inputs.total_rooms} · Income: {inputs.median_income}</p>
       <button
         onClick={explain}
         className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg"

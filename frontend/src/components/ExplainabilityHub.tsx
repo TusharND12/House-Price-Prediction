@@ -7,14 +7,15 @@ export default function ExplainabilityHub({ dark }: { dark: boolean }) {
   const [prediction, setPrediction] = useState<number | null>(null)
   const [contributions, setContributions] = useState<{ name: string; contribution: number; percent: number }[]>([])
   const [inputs, setInputs] = useState({
-    lot_area: 8450,
-    overall_qual: 7,
-    gr_liv_area: 1710,
-    garage_cars: 2,
-    total_bsmt_sf: 856,
-    year_built: 2003,
-    full_bath: 2,
-    fireplace: 0,
+    total_rooms: 2635,
+    total_bedrooms: 537,
+    housing_median_age: 29,
+    median_income: 3.87,
+    population: 1425,
+    households: 499,
+    longitude: -119,
+    latitude: 36,
+    ocean_proximity: 'INLAND',
   })
 
   const fetchExplain = () => {
@@ -54,17 +55,18 @@ export default function ExplainabilityHub({ dark }: { dark: boolean }) {
           <h3 className="font-semibold mb-4 text-slate-800 dark:text-white">Quick Inputs</h3>
           <div className="space-y-3">
             {[
-              { key: 'overall_qual', label: 'Overall Quality', min: 1, max: 10 },
-              { key: 'gr_liv_area', label: 'Living Area', min: 300, max: 6000 },
-              { key: 'lot_area', label: 'Lot Area', min: 1000, max: 50000 },
-            ].map(({ key, label, min, max }) => (
+              { key: 'total_rooms', label: 'Total Rooms', min: 2, max: 15000, step: 100 },
+              { key: 'median_income', label: 'Median Income', min: 0.5, max: 15, step: 0.1 },
+              { key: 'housing_median_age', label: 'Housing Age', min: 1, max: 52, step: 1 },
+            ].map(({ key, label, min, max, step = 1 }) => (
               <div key={key}>
                 <label className="text-sm text-slate-600 dark:text-slate-400">{label}</label>
                 <input
                   type="range"
                   min={min}
                   max={max}
-                  value={inputs[key as keyof typeof inputs]}
+                  step={step}
+                  value={inputs[key as keyof typeof inputs] as number}
                   onChange={(e) => setInputs({ ...inputs, [key]: Number(e.target.value) })}
                   className="w-full"
                 />
